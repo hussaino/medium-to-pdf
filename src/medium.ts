@@ -23,9 +23,8 @@ export class MediumScraper {
       defaultViewport: {
         width: this.width,
         height: this.height,
-        // deviceScaleFactor: this.zoom,
       },
-      // executablePath: '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      executablePath: '/Applications/Chromium.app/Contents/MacOS/Chromium',
       userDataDir: './chromium-data',
       args: ['--hide-scrollbars'],
     });
