@@ -38,6 +38,19 @@ export class MediumScraper {
     }
   }
 
+  async runBrowser() {
+    launch({
+      headless: false,
+      defaultViewport: {
+        width: this.width,
+        height: this.height,
+      },
+      executablePath: '/Applications/Chromium.app/Contents/MacOS/Chromium',
+      userDataDir: './chromium-data',
+      args: ['--hide-scrollbars'],
+    });
+  }
+
   async start() {
     await this.cleanArticlesFolder();
     const browser = await launch({
@@ -76,12 +89,12 @@ export class MediumScraper {
   async parsePage(article: Article) {
     const page = await this.browser.newPage();
     await page.goto(article.href);
-    console.log(`Page loaded: ${article.href}`);
+    console.log(`Page loaded: ${article.title}`);
     await page.waitFor(5000);
     await this.scrollToEnd(page);
-    console.log(`Taking screenshots`);
+    console.log(`Taking screenshots for: ${article.title}`);
     const images = await this.prepareScreenshots(page);
-    console.log('Printing PDF');
+    console.log(`Generating PDF: ${article.title}`);
     await this.generatePDF(images, article.title, article.author);
     await page.waitFor(1000);
     await page.close();
