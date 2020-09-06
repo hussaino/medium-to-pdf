@@ -14,8 +14,8 @@ export interface Image {
 export class MediumScraper {
   browser: Browser;
 
-  height: number = 1000;
-  width: number = 800;
+  height = 1000;
+  width = 800;
 
   constructor() {
     if (fs.existsSync('/Volumes/Kindle/documents')) {
@@ -58,6 +58,7 @@ export class MediumScraper {
     await medium.waitFor(2000);
     const items = await this.extractItems(medium);
     await browser.close();
+    console.log('Done');
     return items;
   }
 
@@ -113,19 +114,19 @@ export class MediumScraper {
       }
     }
     page.waitFor(500);
-    const new_article = await page.$('div.ex.dw');
-    if (new_article) {
+    const newArticle = await page.$('div.ex.dw');
+    if (newArticle) {
       await this.extractItems(page);
     }
   }
 
   async scrollToEnd(page) {
     await page.evaluate(async () => {
-      await new Promise((resolve, reject) => {
-        var totalHeight = 0;
-        var distance = 900;
-        var timer = setInterval(async () => {
-          var scrollHeight = document.body.scrollHeight;
+      await new Promise(resolve => {
+        let totalHeight = 0;
+        const distance = 900;
+        const timer = setInterval(async () => {
+          let scrollHeight = document.body.scrollHeight;
           window.scrollBy(0, distance);
           scrollHeight = document.body.scrollHeight;
           totalHeight += distance;
