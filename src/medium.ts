@@ -17,7 +17,29 @@ export class MediumScraper {
   height: number = 1000;
   width: number = 800;
 
+  constructor() {
+    if (fs.existsSync('/Volumes/Kindle/documents')) {
+      if (!fs.existsSync('/Volumes/Kindle/documents/Articles')) {
+        fs.mkdirSync('/Volumes/Kindle/documents/Articles');
+      }
+    }
+
+    if (!fs.existsSync('./chromium-data')) {
+      fs.mkdirSync('./chromium-data');
+    }
+    if (!fs.existsSync('./screenshots')) {
+      fs.mkdirSync('./screenshots');
+    }
+    if (!fs.existsSync('./articles')) {
+      fs.mkdirSync('./articles');
+    }
+    if (!fs.existsSync('./articles_old')) {
+      fs.mkdirSync('./articles_old');
+    }
+  }
+
   async start() {
+    await this.cleanArticlesFolder();
     const browser = await launch({
       headless: false,
       defaultViewport: {
@@ -28,49 +50,73 @@ export class MediumScraper {
       userDataDir: './chromium-data',
       args: ['--hide-scrollbars'],
     });
+    this.browser = browser;
     const medium = (await browser.pages())[0];
     await medium.goto('https://medium.com/me/list/queue');
     await medium.waitFor(5000);
     await this.scrollToEnd(medium);
     await medium.waitFor(2000);
     const items = await this.extractItems(medium);
-    const https = items.map(item =>
-      item.href.startsWith('https')
-        ? item
-        : { ...item, href: `https://medium.com${item.href}` },
-    );
-    // const link = https[0];
-    for (const link of https) {
-      const page = await browser.newPage();
-      await page.goto(link.href);
-      console.log(`Page loaded: ${link.href}`);
-      await page.waitFor(5000);
-      console.log(`Taking screenshots`);
-      const images = await this.prepareScreenshots(page);
-      console.log('Printing PDF');
-      await this.generatePDF(images, link.title, link.author);
-      await page.waitFor(1000);
-      await page.close();
-    }
     await browser.close();
-    return https;
+    return items;
   }
 
-  async extractItems(page: Page): Promise<Article[]> {
-    const articles = await page.$$('div.ex.dw');
-    const links: Article[] = [];
-    for (const article of articles) {
-      const link = await article.$('a');
-      const authorDiv = await article.$('h4');
-      const author = await page.evaluate(div => div.innerHTML, authorDiv);
-      const href = await page.evaluate(div => {
-        return div.getAttribute('href');
-      }, link);
-      const titleDiv = await link.$('h2');
-      const title = await page.evaluate(h2 => h2.innerHTML, titleDiv);
-      links.push({ title, href, author });
+  async cleanArticlesFolder() {
+    const articles = await fs.promises.readdir('./articles');
+    const files = articles.map(article => `./articles/${article}`);
+    const copies = articles.map(article => `./articles_old/${article}`);
+    for (let i = 0; i < files.length; i++) {
+      const file = await fs.promises.readFile(files[i]);
+      await fs.promises.writeFile(copies[i], file);
+      await fs.promises.unlink(files[i]);
     }
-    return links;
+  }
+
+  async parsePage(article: Article) {
+    const page = await this.browser.newPage();
+    await page.goto(article.href);
+    console.log(`Page loaded: ${article.href}`);
+    await page.waitFor(5000);
+    await this.scrollToEnd(page);
+    console.log(`Taking screenshots`);
+    const images = await this.prepareScreenshots(page);
+    console.log('Printing PDF');
+    await this.generatePDF(images, article.title, article.author);
+    await page.waitFor(1000);
+    await page.close();
+  }
+
+  async extractItems(page: Page) {
+    let article = await page.$('div.ex.dw');
+    const link = await article.$('a');
+    const authorDiv = await article.$('h4');
+    const author = await page.evaluate(div => div.innerHTML, authorDiv);
+    const relative = await page.evaluate(div => {
+      return div.getAttribute('href');
+    }, link);
+    const href = relative.startsWith('https')
+      ? relative
+      : `https://medium.com${relative}`;
+    const titleDiv = await link.$('h2');
+    const title = await page.evaluate(h2 => h2.innerHTML, titleDiv);
+    await this.parsePage({ title, href, author });
+    article = await page.$('div.ex.dw');
+    const h4 = await article.$$('h4');
+    for (const div of h4) {
+      const archive = await page.evaluate(
+        (div: HTMLElement) => div.innerText.includes('Archive'),
+        div,
+      );
+      if (archive) {
+        console.log(`Archiving: ${title}`);
+        await div.click();
+      }
+    }
+    page.waitFor(500);
+    const new_article = await page.$('div.ex.dw');
+    if (new_article) {
+      await this.extractItems(page);
+    }
   }
 
   async scrollToEnd(page) {
@@ -125,16 +171,14 @@ export class MediumScraper {
       }
       return;
     }
-    try {
-      const path = `./screenshots/article_${new Date().getTime()}.png`;
-      await element.screenshot({
-        path,
-      });
-      images.push({
-        path,
-        height: totalHeight,
-      });
-    } catch (ex) {}
+    const path = `./screenshots/article_${new Date().getTime()}.png`;
+    await element.screenshot({
+      path,
+    });
+    images.push({
+      path,
+      height: totalHeight,
+    });
   }
 
   async prepareScreenshots(page: Page): Promise<Image[]> {
