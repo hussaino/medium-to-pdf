@@ -4,9 +4,11 @@ import { MediumScraper } from './medium';
 const medium = new MediumScraper();
 medium
   .start()
-  .then(() => medium.copyFilesToKindle())
+  .then()
   .catch(error => {
     console.log(error);
+  })
+  .finally(() => {
     process.exit(1);
   });
 

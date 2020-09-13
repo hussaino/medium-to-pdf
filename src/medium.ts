@@ -71,6 +71,7 @@ export class MediumScraper {
     await medium.waitFor(2000);
     const items = await this.extractItems(medium);
     await browser.close();
+    await this.copyFilesToKindle();
     console.log('Done');
     return items;
   }
@@ -101,7 +102,12 @@ export class MediumScraper {
   }
 
   async extractItems(page: Page) {
-    let article = await page.$('div.ex.dw');
+    await page.waitFor(500);
+    const identifier = 'div.ey';
+    let article = await page.$(identifier);
+    if (!article) {
+      return;
+    }
     const link = await article.$('a');
     const authorDiv = await article.$('h4');
     const author = await page.evaluate(div => div.innerHTML, authorDiv);
@@ -114,7 +120,7 @@ export class MediumScraper {
     const titleDiv = await link.$('h2');
     const title = await page.evaluate(h2 => h2.innerHTML, titleDiv);
     await this.parsePage({ title, href, author });
-    article = await page.$('div.ex.dw');
+    article = await page.$(identifier);
     const h4 = await article.$$('h4');
     for (const div of h4) {
       const archive = await page.evaluate(
@@ -126,8 +132,8 @@ export class MediumScraper {
         await div.click();
       }
     }
-    page.waitFor(500);
-    const newArticle = await page.$('div.ex.dw');
+    page.waitFor(3000);
+    const newArticle = await page.$(identifier);
     if (newArticle) {
       await this.extractItems(page);
     }
@@ -239,14 +245,21 @@ export class MediumScraper {
 
   async copyFilesToKindle() {
     if (fs.existsSync('/Volumes/Kindle/documents/Articles')) {
+      console.log('Copying files to Kindle');
       const articles = await fs.promises.readdir('./articles');
       const files = articles.map(article => `./articles/${article}`);
       const copies = articles.map(
         article => `/Volumes/Kindle/documents/Articles/${article}`,
       );
       for (let i = 0; i < files.length; i++) {
-        fs.createReadStream(files[i]).pipe(fs.createWriteStream(copies[i]));
+        await new Promise(resolve => {
+          fs.createReadStream(files[i])
+            .pipe(fs.createWriteStream(copies[i]))
+            .on('finish', () => resolve());
+        });
       }
+    } else {
+      console.log('Kindle not connected');
     }
   }
 }
